@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header bg-light">
+        <h4>BDM Performance Analytics</h4>
+    </div>
+    <div class="card-body">
+        <!-- Filters Section -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <label for="time-filter" class="form-label">Analysis Duration:</label>
+                <select id="time-filter" class="form-select">
+                    <option value="daily">Daily</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="monthly" selected>Monthly</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label for="month-filter" class="form-label">Month:</label>
+                <select id="month-filter" class="form-select">
+                    <option value="">All</option>
+                    {% for month in months %}
+                    <option value="{{ month }}">{{ month }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label for="year-filter" class="form-label">Year:</label>
+                <select id="year-filter" class="form-select">
+                    <option value="">All</option>
+                    {% for year in years %}
+                    <option value="{{ year }}">{{ year }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label for="state-filter" class="form-label">State:</label>
+                <select id="state-filter" class="form-select">
+                    <option value="All">All States</option>
+                    {% for state in states %}
+                    <option value="{{ state }}">{{ state }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-1 d-flex align-items-end">
+                <button id="apply-filters" class="btn btn-primary">Apply</button>
+            </div>
+        </div>
+
+        <!-- Performance Table -->
+        <div class="table-responsive">
+            <table id="bdm-performance-table" class="table table-striped table-hover">
+                <thead class="table-dark">
+                    <tr>
+                        <th>BDM Name</th>
+                        <th># Visits</th>
+                        <th># Unique Merchants Visited</th>
+                        <th># Keys Sold</th>
+                        <th>Key Sales Amount</th>
+                    </tr>
+                </thead>
+                <tbody id="performance-data">
+                    {% for row in performance_data %}
+                    <tr>
+                        <td>{{ row['BDM Name'] }}</td>
+                        <td>{{ row['# Visits'] }}</td>
+                        <td>{{ row['# Unique Merchants Visited'] }}</td>
+                        <td>{{ row['# Keys Sold'] }}</td>
+                        <td>{{ row['Key Sales Amount'] }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    $(document).ready(function() {
+        // Initialize DataTable
+        const table = $('#bdm-performance-table').DataTable({
+            "paging": true,
+            "ordering": true,
+            "info": true,
+            "searching": true,
+            "lengthMenu": [[10, 25, 50, -1], [10, 25, 50, "All"]]
+        });
+        
+        // Apply filters button click event
+        $('#apply-filters').click(function() {
+            const timeFilter = $('#time-filter').val();
+            const monthFilter = $('#month-filter').val();
+            const yearFilter = $('#year-filter').val();
+            const stateFilter = $('#state-filter').val();
+            
+            // Send AJAX request to filter data
+            $.ajax({
+                url: '/filter-data',
+                method: 'POST',
+                data: {
+                    time_filter: timeFilter,
+                    month: monthFilter,
+                    year: yearFilter,
+                    state: stateFilter
+                },
+                success: function(data) {
+                    // Clear current table data
+                    table.clear();
+                    
+                    // Add new filtered data
+                    data.forEach(function(row) {
+                        table.row.add([
+                            row['BDM Name'],
+                            row['# Visits'],
+                            row['# Unique Merchants Visited'],
+                            row['# Keys Sold'],
+                            row['Key Sales Amount']
+                        ]);
+                    });
+                    
+                    // Redraw the table
+                    table.draw();
+                },
+                error: function(error) {
+                    console.error('Error fetching filtered data:', error);
+                    alert('Error applying filters. Please try again.');
+                }
+            });
+        });
+        
+        // Show/hide month and year filters based on time filter
+        $('#time-filter').change(function() {
+            const timeFilter = $(this).val();
+            if (timeFilter === 'monthly') {
+                $('#month-filter').prop('disabled', false);
+                $('#year-filter').prop('disabled', false);
+            } else {
+                $('#month-filter').prop('disabled', true);
+                $('#year-filter').prop('disabled', true);
+            }
+        });
+    });
+</script>
+{% endblock %}
