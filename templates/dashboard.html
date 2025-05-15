@@ -6,45 +6,58 @@
         <h4>BDM Performance Analytics</h4>
     </div>
     <div class="card-body">
+        {% if error_message %}
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            {{ error_message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        {% endif %}
+        <div id="ajax-error" class="alert alert-danger alert-dismissible fade show" role="alert" style="display: none;">
+            <span id="ajax-error-message"></span>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+
         <!-- Filters Section -->
-        <div class="row mb-4">
-            <div class="col-md-3">
-                <label for="time-filter" class="form-label">Analysis Duration:</label>
-                <select id="time-filter" class="form-select">
-                    <option value="daily">Daily</option>
-                    <option value="weekly">Weekly</option>
-                    <option value="monthly" selected>Monthly</option>
-                </select>
-            </div>
-            <div class="col-md-3">
-                <label for="month-filter" class="form-label">Month:</label>
-                <select id="month-filter" class="form-select">
-                    <option value="">All</option>
-                    {% for month in months %}
-                    <option value="{{ month }}">{{ month }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-md-2">
-                <label for="year-filter" class="form-label">Year:</label>
-                <select id="year-filter" class="form-select">
-                    <option value="">All</option>
-                    {% for year in years %}
-                    <option value="{{ year }}">{{ year }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-md-3">
-                <label for="state-filter" class="form-label">State:</label>
-                <select id="state-filter" class="form-select">
-                    <option value="All">All States</option>
-                    {% for state in states %}
-                    <option value="{{ state }}">{{ state }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-md-1 d-flex align-items-end">
-                <button id="apply-filters" class="btn btn-primary">Apply</button>
+        <div class="filter-section">
+            <div class="row mb-4">
+                <div class="col-md-3">
+                    <label for="time-filter" class="form-label">Analysis Duration:</label>
+                    <select id="time-filter" class="form-select">
+                        <option value="daily">Daily</option>
+                        <option value="weekly">Weekly</option>
+                        <option value="monthly" selected>Monthly</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="month-filter" class="form-label">Month:</label>
+                    <select id="month-filter" class="form-select">
+                        <option value="">All</option>
+                        {% for month in months %}
+                        <option value="{{ month }}">{{ month }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label for="year-filter" class="form-label">Year:</label>
+                    <select id="year-filter" class="form-select">
+                        <option value="">All</option>
+                        {% for year in years %}
+                        <option value="{{ year }}">{{ year }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="state-filter" class="form-label">State:</label>
+                    <select id="state-filter" class="form-select">
+                        <option value="All">All States</option>
+                        {% for state in states %}
+                        <option value="{{ state }}">{{ state }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-1 d-flex align-items-end">
+                    <button id="apply-filters" class="btn btn-primary">Apply</button>
+                </div>
             </div>
         </div>
 
@@ -73,6 +86,14 @@
                 </tbody>
             </table>
         </div>
+
+        <!-- Loading indicator -->
+        <div id="loading-indicator" style="display: none; text-align: center; margin-top: 20px;">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p>Loading data...</p>
+        </div>
     </div>
 </div>
 {% endblock %}
@@ -80,21 +101,91 @@
 {% block extra_js %}
 <script>
     $(document).ready(function() {
-        // Initialize DataTable
+        // Initialize DataTable with proper options
         const table = $('#bdm-performance-table').DataTable({
             "paging": true,
             "ordering": true,
-            "info": true,
+            "info": true, 
             "searching": true,
-            "lengthMenu": [[10, 25, 50, -1], [10, 25, 50, "All"]]
+            "lengthMenu": [[10, 25, 50, -1], [10, 25, 50, "All"]],
+            "language": {
+                "emptyTable": "No data available for the selected filters",
+                "zeroRecords": "No matching records found",
+                "info": "Showing _START_ to _END_ of _TOTAL_ entries",
+                "infoEmpty": "Showing 0 to 0 of 0 entries",
+                "infoFiltered": "(filtered from _MAX_ total entries)"
+            },
+            // Remove the default DataTables buttons and we'll add our own
+            "dom": '<"row"<"col-md-6"l><"col-md-6 text-end export-buttons">><"row"<"col-12"tr>><"row"<"col-md-5"i><"col-md-7"p>>'
         });
+        
+        // Add custom export button
+        $('.export-buttons').html(
+            '<button id="custom-export-btn" class="btn btn-success me-2">' +
+            '<i class="bi bi-download"></i> Export to CSV</button>'
+        );
+        
+        // Handle export button click
+        $('#custom-export-btn').on('click', function() {
+            // Get table data
+            const tableData = [];
+            const headers = [];
+            
+            // Get headers
+            $('#bdm-performance-table thead th').each(function() {
+                headers.push($(this).text());
+            });
+            tableData.push(headers);
+            
+            // Get data rows
+            $('#bdm-performance-table tbody tr').each(function() {
+                const rowData = [];
+                $(this).find('td').each(function() {
+                    rowData.push($(this).text());
+                });
+                tableData.push(rowData);
+            });
+            
+            // Convert to CSV
+            let csvContent = "data:text/csv;charset=utf-8,";
+            tableData.forEach(function(rowArray) {
+                const row = rowArray.join(",");
+                csvContent += row + "\r\n";
+            });
+            
+            // Create download link
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "bdm_performance_data.csv");
+            document.body.appendChild(link);
+            
+            // Trigger download
+            link.click();
+            document.body.removeChild(link);
+        });
+        
+        // Add a custom text to show when initially loading the page
+        if (table.data().count() === 0) {
+            $('#ajax-error-message').text('Use the filters above to view BDM performance data.');
+            $('#ajax-error').removeClass('alert-danger').addClass('alert-info').show();
+        }
         
         // Apply filters button click event
         $('#apply-filters').click(function() {
+            // Show loading indicator
+            $('#loading-indicator').show();
+            
+            // Hide any existing error messages
+            $('#ajax-error').hide();
+            
+            // Get filter values
             const timeFilter = $('#time-filter').val();
             const monthFilter = $('#month-filter').val();
             const yearFilter = $('#year-filter').val();
             const stateFilter = $('#state-filter').val();
+            
+            console.log(`Applying filters: time=${timeFilter}, month=${monthFilter}, year=${yearFilter}, state=${stateFilter}`);
             
             // Send AJAX request to filter data
             $.ajax({
@@ -107,26 +198,60 @@
                     state: stateFilter
                 },
                 success: function(data) {
+                    // Hide loading indicator
+                    $('#loading-indicator').hide();
+                    
+                    console.log(`Received data: ${data.length} records`);
+                    
+                    if (data.error) {
+                        // Show error message
+                        $('#ajax-error').removeClass('alert-info').addClass('alert-danger');
+                        $('#ajax-error-message').text('Error: ' + data.error);
+                        $('#ajax-error').show();
+                        return;
+                    }
+                    
                     // Clear current table data
                     table.clear();
                     
-                    // Add new filtered data
-                    data.forEach(function(row) {
-                        table.row.add([
-                            row['BDM Name'],
-                            row['# Visits'],
-                            row['# Unique Merchants Visited'],
-                            row['# Keys Sold'],
-                            row['Key Sales Amount']
-                        ]);
-                    });
+                    if (data.length === 0) {
+                        $('#ajax-error').removeClass('alert-danger').addClass('alert-warning');
+                        $('#ajax-error-message').text('No data available for the selected filters. Try adjusting your criteria.');
+                        $('#ajax-error').show();
+                    } else {
+                        // Add new filtered data
+                        data.forEach(function(row) {
+                            table.row.add([
+                                row['BDM Name'],
+                                row['# Visits'],
+                                row['# Unique Merchants Visited'],
+                                row['# Keys Sold'],
+                                row['Key Sales Amount']
+                            ]);
+                        });
+                        
+                        // Hide any previous alerts
+                        $('#ajax-error').hide();
+                    }
                     
                     // Redraw the table
                     table.draw();
                 },
-                error: function(error) {
-                    console.error('Error fetching filtered data:', error);
-                    alert('Error applying filters. Please try again.');
+                error: function(xhr, status, error) {
+                    // Hide loading indicator
+                    $('#loading-indicator').hide();
+                    
+                    console.error('AJAX error:', error);
+                    
+                    // Show error message
+                    $('#ajax-error').removeClass('alert-info').addClass('alert-danger');
+                    let errorMsg = 'Error applying filters.';
+                    if (xhr.responseJSON && xhr.responseJSON.error) {
+                        errorMsg += ' ' + xhr.responseJSON.error;
+                    }
+                    
+                    $('#ajax-error-message').text(errorMsg);
+                    $('#ajax-error').show();
                 }
             });
         });
@@ -142,6 +267,11 @@
                 $('#year-filter').prop('disabled', true);
             }
         });
+        
+        // Apply filters on page load to initialize the table
+        setTimeout(function() {
+            $('#apply-filters').click();
+        }, 500);
     });
 </script>
 {% endblock %}

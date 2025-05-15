@@ -1,4 +1,3 @@
-# Configuration settings for the BDM Dashboard application
 import os
 
 class Config:
