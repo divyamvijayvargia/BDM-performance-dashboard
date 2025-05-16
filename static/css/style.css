@@ -58,6 +58,32 @@ body {
     padding: 5px 10px;
 }
 
+/* Hide the length menu */
+.dataTables_wrapper .dataTables_length {
+    display: none !important;
+}
+
+/* Style the buttons container */
+.dataTables_wrapper .dt-buttons {
+    margin-bottom: 15px;
+}
+
+/* Style DataTables buttons */
+.dt-button {
+    background-color: #f8f9fa !important;
+    border-color: #dee2e6 !important;
+    color: #212529 !important;
+    padding: 0.25rem 0.5rem !important;
+    font-size: 0.875rem !important;
+    border-radius: 0.25rem !important;
+    margin-left: 0.25rem !important;
+}
+
+.dt-button:hover {
+    background-color: #e9ecef !important;
+    border-color: #dee2e6 !important;
+}
+
 .dataTables_wrapper .dataTables_paginate .paginate_button.current, 
 .dataTables_wrapper .dataTables_paginate .paginate_button.current:hover {
     background: #0d6efd;
@@ -97,21 +123,6 @@ body {
 }
 
 /* Button styles */
-#custom-export-btn {
-    font-weight: bold;
-    background-color: #28a745;
-    border-color: #28a745;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    padding: 0.5rem 1rem;
-    margin-bottom: 10px;
-}
-
-#custom-export-btn:hover {
-    background-color: #218838;
-    border-color: #1e7e34;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-}
-
 #apply-filters {
     font-weight: bold;
 }

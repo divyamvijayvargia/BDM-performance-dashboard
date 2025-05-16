@@ -103,66 +103,24 @@
     $(document).ready(function() {
         // Initialize DataTable with proper options
         const table = $('#bdm-performance-table').DataTable({
-            "paging": true,
+            "paging": false,
             "ordering": true,
             "info": true, 
             "searching": true,
-            "lengthMenu": [[10, 25, 50, -1], [10, 25, 50, "All"]],
+            "lengthChange": false, // Disable the "Show X entries" dropdown
+            "pageLength": -1, // Show all entries
             "language": {
                 "emptyTable": "No data available for the selected filters",
                 "zeroRecords": "No matching records found",
-                "info": "Showing _START_ to _END_ of _TOTAL_ entries",
-                "infoEmpty": "Showing 0 to 0 of 0 entries",
+                "info": "Showing all entries",
+                "infoEmpty": "No entries to show",
                 "infoFiltered": "(filtered from _MAX_ total entries)"
             },
-            // Remove the default DataTables buttons and we'll add our own
-            "dom": '<"row"<"col-md-6"l><"col-md-6 text-end export-buttons">><"row"<"col-12"tr>><"row"<"col-md-5"i><"col-md-7"p>>'
-        });
-        
-        // Add custom export button
-        $('.export-buttons').html(
-            '<button id="custom-export-btn" class="btn btn-success me-2">' +
-            '<i class="bi bi-download"></i> Export to CSV</button>'
-        );
-        
-        // Handle export button click
-        $('#custom-export-btn').on('click', function() {
-            // Get table data
-            const tableData = [];
-            const headers = [];
-            
-            // Get headers
-            $('#bdm-performance-table thead th').each(function() {
-                headers.push($(this).text());
-            });
-            tableData.push(headers);
-            
-            // Get data rows
-            $('#bdm-performance-table tbody tr').each(function() {
-                const rowData = [];
-                $(this).find('td').each(function() {
-                    rowData.push($(this).text());
-                });
-                tableData.push(rowData);
-            });
-            
-            // Convert to CSV
-            let csvContent = "data:text/csv;charset=utf-8,";
-            tableData.forEach(function(rowArray) {
-                const row = rowArray.join(",");
-                csvContent += row + "\r\n";
-            });
-            
-            // Create download link
-            const encodedUri = encodeURI(csvContent);
-            const link = document.createElement("a");
-            link.setAttribute("href", encodedUri);
-            link.setAttribute("download", "bdm_performance_data.csv");
-            document.body.appendChild(link);
-            
-            // Trigger download
-            link.click();
-            document.body.removeChild(link);
+            // Use built-in DataTables buttons
+            "dom": '<"row mb-3"<"col-12 text-end"B>><"row"<"col-12"tr>><"row"<"col-12"i>>',
+            "buttons": [
+                'copy', 'excel', 'csv'
+            ]
         });
         
         // Add a custom text to show when initially loading the page
