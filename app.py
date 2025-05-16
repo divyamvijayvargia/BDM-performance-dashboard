@@ -21,6 +21,7 @@ def load_data():
             df = pd.read_csv(file_path, encoding='latin-1')
         
         print(f"CSV file loaded successfully with shape: {df.shape}")
+        total_rows = len(df)
         
         # Convert Timestamp to datetime (use automatic format detection with dayfirst=True)
         df['Timestamp'] = pd.to_datetime(df['Timestamp'], errors='coerce', dayfirst=True)
@@ -29,16 +30,11 @@ def load_data():
         null_timestamp_count = df['Timestamp'].isna().sum()
         print(f"Null timestamps: {null_timestamp_count} of {len(df)}")
         
-        # Remove rows with null timestamps (except possibly the first row)
-        df_without_null_ts = df.dropna(subset=['Timestamp'])
-        print(f"Rows with valid timestamps: {len(df_without_null_ts)}")
-        
-        if len(df_without_null_ts) == 0:
-            print("No valid timestamps found in the data")
-            return create_dummy_data()
-        
-        # Use the data with valid timestamps
-        df = df_without_null_ts
+        # IMPORTANT: Do NOT drop rows with null timestamps
+        # Instead, fill null timestamps with a default date to preserve all data
+        if null_timestamp_count > 0:
+            print(f"Filling {null_timestamp_count} null timestamps with a default date")
+            df['Timestamp'].fillna(pd.Timestamp('2025-01-01'), inplace=True)
         
         # Convert numeric columns properly
         df['Keys Sold'] = pd.to_numeric(df['Keys Sold'], errors='coerce').fillna(0).astype(int)
@@ -55,8 +51,12 @@ def load_data():
         df['Year'] = df['Timestamp'].dt.year
         df['Date'] = df['Timestamp'].dt.date
         
-        # Print summary
+        # Print summary and verify we maintained all rows
         print(f"Data loaded successfully: {len(df)} rows with {df['BDM Name'].nunique()} unique BDMs")
+        if len(df) != total_rows:
+            print(f"WARNING: Row count changed from {total_rows} to {len(df)}!")
+        else:
+            print(f"Confirmed all {total_rows} rows were preserved")
         
         return df
         
@@ -104,7 +104,7 @@ def create_dummy_data():
     print(f"Created dummy data with {len(df)} rows")
     return df
 
-def get_bdm_performance(df, time_filter=None, month=None, year=None, state=None):
+def get_bdm_performance(df, time_filter=None, month=None, year=None, state=None, start_date=None, end_date=None):
     """Calculate BDM performance metrics based on filters"""
     try:
         # Apply filters
@@ -117,47 +117,75 @@ def get_bdm_performance(df, time_filter=None, month=None, year=None, state=None)
             print("Warning: Empty DataFrame provided for filtering")
             return []
         
-        # Apply time filter (daily, weekly, monthly)
-        current_date = datetime.now().date()
+        # Debug info - print dimensions and sample data
+        print(f"Original data dimensions: {filtered_df.shape}, unique BDMs: {filtered_df['BDM Name'].nunique()}")
         
-        if time_filter == 'daily':
-            filtered_df = filtered_df[filtered_df['Date'] == current_date]
-            print(f"Daily filter applied for {current_date}: {len(filtered_df)} records remaining")
-        elif time_filter == 'weekly':
-            one_week_ago = current_date - timedelta(days=7)
-            filtered_df = filtered_df[filtered_df['Date'] >= one_week_ago]
-            print(f"Weekly filter applied from {one_week_ago} to {current_date}: {len(filtered_df)} records remaining")
-        elif time_filter == 'monthly':
-            # If specific month is provided, filter by it
-            if month and year and month != '' and year != '':
-                try:
-                    # Handle both numeric month and month name
-                    if month.isdigit():
-                        month_num = int(month)
-                    else:
-                        try:
-                            month_num = datetime.strptime(month, '%B').month
-                        except ValueError:
-                            # Try abbreviated month name
-                            month_num = datetime.strptime(month, '%b').month
-                    
-                    year_num = int(year)
-                    print(f"Applying monthly filter for month={month_num}, year={year_num}")
-                    
-                    # Filter by month number and year
-                    filtered_df = filtered_df[(filtered_df['Timestamp'].dt.month == month_num) & 
-                                             (filtered_df['Timestamp'].dt.year == year_num)]
-                except (ValueError, TypeError) as e:
-                    print(f"Error parsing month/year: {str(e)}")
-                    # Use March 2025 as default since we know this exists in the data
-                    print("Falling back to March 2025")
-                    filtered_df = filtered_df[(filtered_df['Timestamp'].dt.month == 3) & 
-                                             (filtered_df['Timestamp'].dt.year == 2025)]
-            else:
-                # Default to March 2025 since we know it exists in the data
-                print("No month/year specified. Using March 2025")
-                filtered_df = filtered_df[(filtered_df['Timestamp'].dt.month == 3) & 
-                                         (filtered_df['Timestamp'].dt.year == 2025)]
+        # Check for "Show All" condition
+        is_show_all = ((time_filter == 'monthly' and not month and not year) or 
+                       (time_filter == 'daily' and not start_date) or 
+                       (time_filter == 'weekly' and (not start_date or not end_date))) and state == 'All'
+        
+        if is_show_all:
+            print("Show all data request detected - skipping all time filters")
+            # Skip time filters but still apply state filter if needed
+        else:
+            # Apply time filter (daily, weekly, monthly)
+            if time_filter == 'daily':
+                if start_date:
+                    try:
+                        # Parse the start date from MM/DD/YYYY format
+                        selected_date = datetime.strptime(start_date, '%m/%d/%Y').date()
+                        filtered_df = filtered_df[filtered_df['Date'] == selected_date]
+                        print(f"Daily filter applied for selected date {selected_date}: {len(filtered_df)} records remaining")
+                    except (ValueError, TypeError) as e:
+                        print(f"Error parsing start date: {str(e)}")
+                        # Default to showing all data if parsing fails
+                        print("Showing all data since date parsing failed")
+                else:
+                    # If no start date is provided, default to showing all data
+                    print("No specific date selected for daily filter, showing all data")
+            elif time_filter == 'weekly':
+                if start_date and end_date:
+                    try:
+                        # Parse the date range from MM/DD/YYYY format
+                        start = datetime.strptime(start_date, '%m/%d/%Y').date()
+                        end = datetime.strptime(end_date, '%m/%d/%Y').date()
+                        filtered_df = filtered_df[(filtered_df['Date'] >= start) & (filtered_df['Date'] <= end)]
+                        print(f"Weekly filter applied from {start} to {end}: {len(filtered_df)} records remaining")
+                    except (ValueError, TypeError) as e:
+                        print(f"Error parsing date range: {str(e)}")
+                        # Default to showing all data if parsing fails
+                        print("Showing all data since date range parsing failed")
+                else:
+                    # If no date range is provided, default to showing all data
+                    print("No specific week selected for weekly filter, showing all data")
+            elif time_filter == 'monthly':
+                # If specific month is provided, filter by it
+                if month and year and month != '' and year != '':
+                    try:
+                        # Handle both numeric month and month name
+                        if month.isdigit():
+                            month_num = int(month)
+                        else:
+                            try:
+                                month_num = datetime.strptime(month, '%B').month
+                            except ValueError:
+                                # Try abbreviated month name
+                                month_num = datetime.strptime(month, '%b').month
+                        
+                        year_num = int(year)
+                        print(f"Applying monthly filter for month={month_num}, year={year_num}")
+                        
+                        # Filter by month number and year
+                        filtered_df = filtered_df[(filtered_df['Timestamp'].dt.month == month_num) & 
+                                                (filtered_df['Timestamp'].dt.year == year_num)]
+                    except (ValueError, TypeError) as e:
+                        print(f"Error parsing month/year: {str(e)}")
+                        # Show all data instead of defaulting to a specific month/year
+                        print("Showing all data since month/year parsing failed")
+                else:
+                    # Show all data if no month/year specified
+                    print("No month/year specified. Showing all data")
         
         # Apply state filter
         if state and state != 'All':
@@ -171,6 +199,9 @@ def get_bdm_performance(df, time_filter=None, month=None, year=None, state=None)
         if filtered_df.empty:
             print("No data matches the current filters")
             return []
+        
+        # Debug info - print filtered dimensions before aggregation
+        print(f"Filtered data before aggregation: {filtered_df.shape}, unique BDMs: {filtered_df['BDM Name'].nunique()}")
         
         # Calculate performance metrics grouped by BDM
         try:
@@ -188,7 +219,7 @@ def get_bdm_performance(df, time_filter=None, month=None, year=None, state=None)
             performance['Key Sales Amount'] = performance['Key Sales Amount'].apply(lambda x: f"₹{x:,.2f}")
             
             result = performance.to_dict('records')
-            print(f"Generated performance data for {len(result)} BDMs")
+            print(f"Generated performance data for {len(result)} BDMs with a total of {filtered_df.shape[0]} rows")
             return result
         except Exception as e:
             print(f"Error calculating performance metrics: {str(e)}")
@@ -263,42 +294,41 @@ def dashboard():
 
 @app.route('/filter-data', methods=['POST'])
 def filter_data():
-    """API endpoint to filter data based on user selections"""
+    """Filter data based on the provided parameters"""
     try:
-        print("\n" + "-"*50)
-        print("Processing filter-data request")
-        
-        # Get filter parameters from request
+        # Get filter parameters
         time_filter = request.form.get('time_filter', 'monthly')
         month = request.form.get('month', '')
         year = request.form.get('year', '')
         state = request.form.get('state', 'All')
+        start_date = request.form.get('start_date', None)
+        end_date = request.form.get('end_date', None)
         
-        print(f"Filter parameters: time={time_filter}, month={month}, year={year}, state={state}")
+        # Check if this is essentially a "show all" request
+        is_show_all = (
+            (time_filter == 'monthly' and not month and not year) or
+            (time_filter == 'daily' and not start_date) or
+            (time_filter == 'weekly' and (not start_date or not end_date))
+        ) and state == 'All'
         
-        # Load data for each request to ensure we have the latest data
+        print(f"Filter request received: time={time_filter}, month={month}, year={year}, state={state}, start_date={start_date}, end_date={end_date}")
+        print(f"Show all data: {is_show_all}")
+        
+        # Load data
         df = load_data()
+        
         if df.empty:
-            print("Warning: Loaded DataFrame is empty")
-            return jsonify([])
+            return jsonify({"error": "No data available"})
         
-        # Get filtered performance data
-        performance_data = get_bdm_performance(df, time_filter, month, year, state)
+        # Apply filters
+        performance_data = get_bdm_performance(df, time_filter, month, year, state, start_date, end_date)
         
-        # Check if we got any performance data
-        if not performance_data:
-            print("No performance data returned from filter")
-            # Return empty array instead of error to avoid confusion
-            return jsonify([])
-        
-        print(f"Returning {len(performance_data)} BDM records")
         return jsonify(performance_data)
     except Exception as e:
-        error_msg = str(e)
-        print(f"Error processing filter request: {error_msg}")
+        print(f"Error in filter_data route: {str(e)}")
         import traceback
         traceback.print_exc()
-        return jsonify({"error": error_msg}), 500
+        return jsonify({"error": str(e)})
 
 if __name__ == '__main__':
     app.run(debug=True)

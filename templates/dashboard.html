@@ -55,8 +55,25 @@
                         {% endfor %}
                     </select>
                 </div>
-                <div class="col-md-1 d-flex align-items-end">
+                <div class="col-md-2 d-flex align-items-end filter-buttons">
                     <button id="apply-filters" class="btn btn-primary">Apply</button>
+                    <button id="reset-filters" class="btn btn-outline-secondary">Reset</button>
+                </div>
+            </div>
+            
+            <!-- Date Picker for Daily/Weekly Analysis -->
+            <div id="date-picker-container" class="row mb-4" style="display: none;">
+                <div class="col-md-6">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <label for="start-date" class="form-label">Start Date</label>
+                            <input type="text" id="start-date" class="form-control" placeholder="MM/DD/YYYY">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="end-date" class="form-label">End Date</label>
+                            <input type="text" id="end-date" class="form-control" placeholder="MM/DD/YYYY" readonly>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -98,7 +115,69 @@
 </div>
 {% endblock %}
 
+{% block extra_css %}
+<!-- Add Flatpickr CSS -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<style>
+    .flatpickr-calendar {
+        background: #fff;
+        box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        border-radius: 5px;
+    }
+    .flatpickr-day.selected {
+        background: #0d6efd;
+        border-color: #0d6efd;
+    }
+    .flatpickr-day.today {
+        border-color: #0d6efd;
+    }
+    #date-picker-container {
+        transition: all 0.3s ease;
+    }
+    
+    /* Button styling */
+    .filter-buttons {
+        padding-top: 8px;
+        padding-bottom: 8px;
+    }
+    
+    #apply-filters {
+        padding: 8px 18px;
+        margin-right: 12px;
+        border-radius: 5px;
+        font-weight: 500;
+        transition: all 0.3s ease;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    
+    #apply-filters:hover {
+        background-color: #0b5ed7;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+        transform: translateY(-1px);
+    }
+    
+    #reset-filters {
+        padding: 8px 18px;
+        border-radius: 5px;
+        font-weight: 500;
+        transition: all 0.3s ease;
+        border: 1px solid #6c757d;
+    }
+    
+    #reset-filters:hover {
+        background-color: #6c757d;
+        color: #fff;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        transform: translateY(-1px);
+    }
+</style>
+{% endblock %}
+
 {% block extra_js %}
+<!-- Add Flatpickr library -->
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<!-- Add our custom date picker script -->
+<script src="{{ url_for('static', filename='js/date-picker.js') }}"></script>
 <script>
     $(document).ready(function() {
         // Initialize DataTable with proper options
@@ -143,7 +222,16 @@
             const yearFilter = $('#year-filter').val();
             const stateFilter = $('#state-filter').val();
             
-            console.log(`Applying filters: time=${timeFilter}, month=${monthFilter}, year=${yearFilter}, state=${stateFilter}`);
+            // Get date range if applicable
+            let startDate = null;
+            let endDate = null;
+            
+            if (timeFilter === 'daily' || timeFilter === 'weekly') {
+                startDate = $('#start-date').val();
+                endDate = $('#end-date').val();
+            }
+            
+            console.log(`Applying filters: time=${timeFilter}, month=${monthFilter}, year=${yearFilter}, state=${stateFilter}, startDate=${startDate}, endDate=${endDate}`);
             
             // Send AJAX request to filter data
             $.ajax({
@@ -153,7 +241,9 @@
                     time_filter: timeFilter,
                     month: monthFilter,
                     year: yearFilter,
-                    state: stateFilter
+                    state: stateFilter,
+                    start_date: startDate,
+                    end_date: endDate
                 },
                 success: function(data) {
                     // Hide loading indicator
@@ -174,7 +264,7 @@
                     
                     if (data.length === 0) {
                         $('#ajax-error').removeClass('alert-danger').addClass('alert-warning');
-                        $('#ajax-error-message').text('No data available for the selected filters. Try adjusting your criteria.');
+                        $('#ajax-error-message').text('No data found for the selected filters. Try adjusting your criteria or clear filters to see all data.');
                         $('#ajax-error').show();
                     } else {
                         // Add new filtered data
@@ -190,6 +280,12 @@
                         
                         // Hide any previous alerts
                         $('#ajax-error').hide();
+                        
+                        // Show result count message
+                        const countMessage = `Showing data for ${data.length} BDM${data.length > 1 ? 's' : ''} (based on all matching records)`;
+                        $('#ajax-error').removeClass('alert-danger').addClass('alert-info');
+                        $('#ajax-error-message').text(countMessage);
+                        $('#ajax-error').show();
                     }
                     
                     // Redraw the table
@@ -230,6 +326,18 @@
         setTimeout(function() {
             $('#apply-filters').click();
         }, 500);
+        
+        // Reset filters button
+        $('#reset-filters').click(function() {
+            // Reset all filters to default values
+            $('#time-filter').val('monthly').trigger('change');
+            $('#month-filter').val('');
+            $('#year-filter').val('');
+            $('#state-filter').val('All');
+            
+            // Apply the reset filters
+            $('#apply-filters').click();
+        });
     });
 </script>
 {% endblock %}
