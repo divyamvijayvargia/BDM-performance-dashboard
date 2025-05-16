@@ -6,6 +6,11 @@
         <h4>BDM Performance Analytics</h4>
     </div>
     <div class="card-body">
+        <!-- Row Count Display -->
+        <div id="row-count-display" class="text-muted small mb-2" style="color: #6c757d; font-size: 0.8rem;">
+            Loading data...
+        </div>
+        
         {% if error_message %}
         <div class="alert alert-danger alert-dismissible fade show" role="alert">
             {{ error_message }}
@@ -249,7 +254,7 @@
                     // Hide loading indicator
                     $('#loading-indicator').hide();
                     
-                    console.log(`Received data: ${data.length} records`);
+                    console.log(`Received data: `, data);
                     
                     if (data.error) {
                         // Show error message
@@ -259,16 +264,32 @@
                         return;
                     }
                     
+                    // Handle response data
+                    let performanceData = data;
+                    let totalRows = 0;
+                    
+                    // Get total rows from the first row if available
+                    if (Array.isArray(data) && data.length > 0 && data[0]._total_rows) {
+                        totalRows = data[0]._total_rows;
+                    }
+                    
                     // Clear current table data
                     table.clear();
                     
-                    if (data.length === 0) {
+                    // Update row count display in top left
+                    if (totalRows > 0) {
+                        $('#row-count-display').text(`Displaying ${performanceData.length} BDMs from ${totalRows.toLocaleString()} total records`);
+                    } else {
+                        $('#row-count-display').text(`Displaying ${performanceData.length} BDMs`);
+                    }
+                    
+                    if (performanceData.length === 0) {
                         $('#ajax-error').removeClass('alert-danger').addClass('alert-warning');
                         $('#ajax-error-message').text('No data found for the selected filters. Try adjusting your criteria or clear filters to see all data.');
                         $('#ajax-error').show();
                     } else {
                         // Add new filtered data
-                        data.forEach(function(row) {
+                        performanceData.forEach(function(row) {
                             table.row.add([
                                 row['BDM Name'],
                                 row['# Visits'],
@@ -282,7 +303,7 @@
                         $('#ajax-error').hide();
                         
                         // Show result count message
-                        const countMessage = `Showing data for ${data.length} BDM${data.length > 1 ? 's' : ''} (based on all matching records)`;
+                        const countMessage = `Showing data for ${performanceData.length} BDM${performanceData.length > 1 ? 's' : ''} (based on all matching records)`;
                         $('#ajax-error').removeClass('alert-danger').addClass('alert-info');
                         $('#ajax-error-message').text(countMessage);
                         $('#ajax-error').show();

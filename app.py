@@ -13,15 +13,50 @@ def load_data():
         file_path = app.config['DATA_FILE']
         print(f"Attempting to load data from {file_path}")
         
-        # Try to read the CSV file with UTF-8 encoding
-        try:
-            df = pd.read_csv(file_path, encoding='utf-8')
-        except UnicodeDecodeError:
-            # If UTF-8 fails, try other encodings
-            df = pd.read_csv(file_path, encoding='latin-1')
+        # Try to read the CSV file with different encodings
+        encodings = ['utf-8', 'latin-1', 'cp1252', 'ISO-8859-1']
+        df = None
+        
+        for encoding in encodings:
+            try:
+                print(f"Trying to read CSV with {encoding} encoding...")
+                df = pd.read_csv(file_path, encoding=encoding, low_memory=False)
+                print(f"Successfully read CSV with {encoding} encoding")
+                break
+            except UnicodeDecodeError:
+                print(f"Failed to read with {encoding} encoding")
+                continue
+            except Exception as e:
+                print(f"Error reading CSV with {encoding} encoding: {str(e)}")
+                continue
+        
+        if df is None:
+            print("Failed to read CSV with any encoding, creating dummy data")
+            return create_dummy_data()
         
         print(f"CSV file loaded successfully with shape: {df.shape}")
         total_rows = len(df)
+        print(f"Column names: {df.columns.tolist()}")
+        
+        # Verify required columns exist
+        required_columns = ['Timestamp', 'BDM Name', 'Shop Name', 'State', 'Keys Sold', 'Key Amount']
+        missing_columns = [col for col in required_columns if col not in df.columns]
+        
+        if missing_columns:
+            print(f"WARNING: Missing required columns: {missing_columns}")
+            # If missing required columns, try to be flexible with column names by checking for similar ones
+            for missing_col in missing_columns.copy():
+                for col in df.columns:
+                    if missing_col.lower() in col.lower():
+                        print(f"Found alternative column '{col}' for '{missing_col}'")
+                        df[missing_col] = df[col]
+                        missing_columns.remove(missing_col)
+                        break
+        
+        if missing_columns:
+            print(f"Still missing columns after attempting to find alternatives: {missing_columns}")
+            print("Creating dummy data since required columns are missing")
+            return create_dummy_data()
         
         # Convert Timestamp to datetime (use automatic format detection with dayfirst=True)
         df['Timestamp'] = pd.to_datetime(df['Timestamp'], errors='coerce', dayfirst=True)
@@ -50,6 +85,13 @@ def load_data():
         df['Week'] = df['Timestamp'].dt.isocalendar().week
         df['Year'] = df['Timestamp'].dt.year
         df['Date'] = df['Timestamp'].dt.date
+        
+        # Print summary statistics
+        print(f"Unique BDMs: {df['BDM Name'].nunique()}")
+        print(f"Unique Shops: {df['Shop Name'].nunique()}")
+        print(f"Unique States: {df['State'].nunique()}")
+        print(f"Total Keys Sold: {df['Keys Sold'].sum()}")
+        print(f"Total Sales Amount: {df['Key Amount'].sum()}")
         
         # Print summary and verify we maintained all rows
         print(f"Data loaded successfully: {len(df)} rows with {df['BDM Name'].nunique()} unique BDMs")
@@ -119,6 +161,11 @@ def get_bdm_performance(df, time_filter=None, month=None, year=None, state=None,
         
         # Debug info - print dimensions and sample data
         print(f"Original data dimensions: {filtered_df.shape}, unique BDMs: {filtered_df['BDM Name'].nunique()}")
+        print(f"Original data contains null timestamps: {filtered_df['Timestamp'].isna().sum()} rows")
+        
+        # Display a sample of timestamps to identify patterns
+        timestamp_sample = filtered_df['Timestamp'].dropna().sample(min(5, len(filtered_df))).tolist()
+        print(f"Sample timestamps: {timestamp_sample}")
         
         # Check for "Show All" condition
         is_show_all = ((time_filter == 'monthly' and not month and not year) or 
@@ -320,8 +367,16 @@ def filter_data():
         if df.empty:
             return jsonify({"error": "No data available"})
         
+        # Store the total number of rows in the dataset
+        total_rows = len(df)
+        print(f"Total rows in dataset: {total_rows}")
+        
         # Apply filters
         performance_data = get_bdm_performance(df, time_filter, month, year, state, start_date, end_date)
+        
+        # Add total_rows to each row in performance_data
+        for row in performance_data:
+            row['_total_rows'] = total_rows
         
         return jsonify(performance_data)
     except Exception as e:
